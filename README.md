@@ -18,3 +18,10 @@ dotnet run --project src/Cli
 ## Середовище
 * .NET SDK 8.0
 * Arch Linux x64
+
+## Self-contained publish
+
+| RID | Publish directory size |
+|---|---:|
+| linux-x64 | 80M |
+| win-x64 | 77M |
