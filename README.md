@@ -21,6 +21,12 @@ dotnet build src/Core/Core.csproj
 # Запуск CLI проекту
 dotnet run --project src/Cli/Cli.csproj
 
+# Імпорт з іншого CSV-файлу
+dotnet run --project src/Cli/Cli.csproj -- path/to/orders.csv
+
+# Імпорт товарів із JSON-файлу
+dotnet run --project src/Cli/Cli.csproj -- data/sample.json
+
 # Self-contained publish
 dotnet publish src/Cli/Cli.csproj \
     -c Release \
@@ -46,10 +52,21 @@ dotnet publish src/Cli/Cli.csproj \
 ## Структура проекту
 ```text
 CrossApp
+├── data
+│   ├── sample.csv
+│   └── sample.json
 ├── CrossApp.slnx
 ├── README.md
 └── src
     ├── Core
+    │   ├── Dto
+    │   │   ├── CustomerDto.cs
+    │   │   ├── ImportResult.cs
+    │   │   ├── OrderImportResult.cs
+    │   │   └── ProductDto.cs
+    │   ├── Import
+    │   │   ├── OrderCsvImporter.cs
+    │   │   └── ProductJsonImporter.cs
     │   ├── Core.csproj
     │   ├── EnvironmentInfo.cs
     │   └── EnvironmentReport.cs
@@ -60,6 +77,19 @@ CrossApp
 `Core` - class library, який містить основну логіку та сутності предметної області.
 
 `Cli` - console application, який використовує Core для демонстрації роботи.
+
+## Формат даних
+
+Товари та клієнти імпортуються з CSV-файлу в кодуванні UTF-8. Роздільник — крапка
+з комою, перший рядок може містити заголовок `type;id;name;value;details;note`.
+Для товару ці колонки означають ціну, категорію та опис. Для клієнта — електронну
+адресу, телефон та адресу проживання. Префікс `P` позначає товар, а `C` — клієнта.
+Ціна записується з крапкою як десятковим роздільником. `data/sample.csv` містить
+10 коректних записів і 3 навмисно пошкоджені рядки для демонстрації помилок.
+
+Для JSON підтримується масив товарів із полями `id`, `name`, `category`, `price` і
+необов'язковим `description`. CLI автоматично обирає імпортер за розширенням `.csv`
+або `.json`.
 
 ## Self-contained publish
 

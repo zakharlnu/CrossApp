@@ -1,30 +1,67 @@
-﻿using Core;
-using System.Text.Encodings.Web;
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using Core.Dto;
+using Core.Import;
 
-var report = EnvironmentInfo.Collect();
+string path = args.Length > 0
+    ? args[0]
+    : Path.Combine("data", "sample.csv");
 
-if (args.Contains("--json"))
+if (!File.Exists(path))
 {
-    var options = new JsonSerializerOptions
+    Console.WriteLine($"Файл не знайдено: {Path.GetFullPath(path)}");
+    return 1;
+}
+
+OrderImportResult? result = Path.GetExtension(path).ToLowerInvariant() switch
+{
+    ".csv" => OrderCsvImporter.Load(path),
+    ".json" => FromProducts(ProductJsonImporter.Load(path)),
+    _ => null
+};
+
+if (result is null)
+{
+    Console.WriteLine($"Непідтримуваний формат файлу: {Path.GetExtension(path)}");
+    return 1;
+}
+
+int importedCount = result.Products.Count + result.Customers.Count;
+Console.WriteLine($"Завантажено записів: {importedCount}");
+
+foreach (ProductDto product in result.Products.Take(5))
+{
+    Console.WriteLine(
+        $" {product.Id,-6} товар   {product.Name,-25} " +
+        $"{product.Category,-15} {product.Price,10:F2}");
+}
+
+foreach (CustomerDto customer in result.Customers.Take(5))
+{
+    Console.WriteLine(
+        $" {customer.Id,-6} клієнт  {customer.Name,-25} " +
+        $"{customer.Email ?? "email не вказано"}");
+}
+
+if (result.Errors.Count > 0)
+{
+    Console.WriteLine($"Пропущено рядків: {result.Errors.Count}");
+
+    foreach (string error in result.Errors)
     {
-        WriteIndented = true,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        Converters = { new JsonStringEnumConverter() },
-    };
+        Console.WriteLine($" ! {error}");
+    }
+}
 
-    Console.WriteLine(JsonSerializer.Serialize(report, options));
-}
-else
-{
-    Console.WriteLine("CrossApp – інформація про середовище");
-    Console.WriteLine(new string('-', 52));
-    Console.WriteLine($"ОС: {report.OsDescription}");
-    Console.WriteLine($"Runtime : {report.FrameworkDescription}");
-    Console.WriteLine($"Архітектура: {report.ProcessArchitecture}");
-    Console.WriteLine($"RID визначено: {report.DetectedRid}");
-    Console.WriteLine($"RID (від .NET) : {report.ReportedRid}");
-    Console.WriteLine($"Каталог: {report.BaseDirectory}");
-    Console.WriteLine($"Примітка: {report.BuildNote}");
-}
+int totalCount = importedCount + result.Errors.Count;
+double errorPercentage = totalCount == 0
+    ? 0
+    : result.Errors.Count * 100.0 / totalCount;
+
+Console.WriteLine(
+    $"Статистика: усього {totalCount}, прийнято {importedCount}, " +
+    $"пропущено {result.Errors.Count}, помилок {errorPercentage:F1}%");
+Console.WriteLine(new string('-', 52));
+
+return 0;
+
+static OrderImportResult FromProducts(ImportResult<ProductDto> result) =>
+    new(result.Items, [], result.Errors);
