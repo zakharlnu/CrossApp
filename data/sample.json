@@ -32,5 +32,9 @@
     "category": "Аксесуари",
     "price": 1299.00,
     "description": "Шість портів"
+  },
+  {
+    "price": 1299.00,
+    "description": "Шість портів"
   }
 ]

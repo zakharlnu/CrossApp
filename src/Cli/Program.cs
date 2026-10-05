@@ -1,4 +1,4 @@
-using Core.Dto;
+﻿using Core.Dto;
 using Core.Import;
 
 string path = args.Length > 0
@@ -43,7 +43,7 @@ foreach (CustomerDto customer in result.Customers.Take(5))
 
 if (result.Errors.Count > 0)
 {
-    Console.WriteLine($"Пропущено рядків: {result.Errors.Count}");
+    Console.WriteLine($"Пропущено записів: {result.Errors.Count}");
 
     foreach (string error in result.Errors)
     {
