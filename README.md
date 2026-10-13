@@ -21,6 +21,9 @@ dotnet build src/Core/Core.csproj
 # Запуск CLI проекту
 dotnet run --project src/Cli/Cli.csproj
 
+# Запуск із файловим сховищем замовлень
+dotnet run --project src/Cli/Cli.csproj -- --file
+
 # Імпорт з іншого CSV-файлу
 dotnet run --project src/Cli/Cli.csproj -- path/to/orders.csv
 
@@ -59,6 +62,8 @@ CrossApp
 ├── README.md
 └── src
     ├── Core
+    │   ├── Abstractions
+    │   │   └── IOrderStore.cs
     │   ├── Domain
     │   │   ├── Customer.cs
     │   │   ├── Order.cs
@@ -77,9 +82,15 @@ CrossApp
     │   │   ├── OrderCsvImporter.cs
     │   │   ├── ProductDomainMapper.cs
     │   │   └── ProductJsonImporter.cs
+    │   ├── Services
+    │   │   └── OrderService.cs
+    │   ├── Storage
+    │   │   ├── FileOrderStore.cs
+    │   │   └── InMemoryOrderStore.cs
     │   ├── Core.csproj
     │   ├── EnvironmentInfo.cs
-    │   └── EnvironmentReport.cs
+    │   ├── EnvironmentReport.cs
+    │   └── SampleData.cs
     └── Cli
         ├── Cli.csproj
         └── Program.cs
@@ -131,6 +142,25 @@ CrossApp
 
 `ProductDomainMapper` перетворює `ImportResult<ProductDto>` на `ImportResult<Product>`:
 зберігає помилки читання файлу та додає помилки доменних інваріантів.
+
+## Сервісний шар і сховища
+
+`IOrderStore` визначає операції отримання списку, пошуку, додавання, оновлення та
+видалення замовлень. Його реалізують `InMemoryOrderStore` і `FileOrderStore`.
+`OrderService` залежить тільки від `IOrderStore` та надає операції `CreateOrder`,
+`AddLine`, `Confirm`, `All` і `Find`.
+
+Залежності мають такий напрямок:
+
+```text
+Cli → OrderService → IOrderStore ← InMemoryOrderStore
+                                  ← FileOrderStore
+```
+
+Без аргументу `--file` використовуються 15 демонстраційних замовлень у пам'яті, які
+зникають після завершення процесу. З аргументом `--file` агрегати зберігаються як
+`OrderDto` разом із рядками у `data/orders.json` біля виконуваного файла. Повторний
+запуск завантажує раніше збережені замовлення.
 
 ## Self-contained publish
 

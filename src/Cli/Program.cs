@@ -1,9 +1,14 @@
-﻿using Core.Domain;
+﻿using Core;
+using Core.Abstractions;
+using Core.Domain;
 using Core.Dto;
 using Core.Import;
+using Core.Services;
+using Core.Storage;
 
-string path = args.Length > 0
-    ? args[0]
+string? importPath = args.FirstOrDefault(argument => !argument.StartsWith("--"));
+string path = importPath is not null
+    ? importPath
     : Path.Combine("data", "sample.csv");
 
 if (!File.Exists(path))
@@ -63,6 +68,10 @@ Console.WriteLine(
 Console.WriteLine(new string('-', 52));
 
 Console.WriteLine();
+Console.WriteLine("==================================================");
+Console.WriteLine("==================================================");
+Console.WriteLine("==================================================");
+Console.WriteLine("==================================================");
 Console.WriteLine("=== Лабораторна 4: успішний сценарій ===");
 
 Customer customerEntity = Customer.Create(
@@ -103,6 +112,11 @@ Console.WriteLine($"Товар із DTO: {Product.FromDto(laptop.ToDto())}");
 Console.WriteLine($"Клієнт із DTO: {Customer.FromDto(customerEntity.ToDto())}");
 
 Console.WriteLine();
+Console.WriteLine("==================================================");
+Console.WriteLine("==================================================");
+Console.WriteLine("==================================================");
+Console.WriteLine("==================================================");
+Console.WriteLine("==================================================");
 Console.WriteLine("=== Лабораторна 4: порушення інваріантів ===");
 
 TryDo(
@@ -150,6 +164,44 @@ foreach (string error in domainImport.Errors)
 }
 
 Console.WriteLine($"Стан першого замовлення після відмов: {order}");
+
+Console.WriteLine();
+Console.WriteLine("==================================================");
+Console.WriteLine("=== Лабораторна 5: сервіс і сховища ===");
+
+bool useFileStore = args.Contains("--file");
+string ordersPath = Path.Combine(AppContext.BaseDirectory, "data", "orders.json");
+IOrderStore orderStore = useFileStore
+    ? new FileOrderStore(ordersPath)
+    : new InMemoryOrderStore(SampleData.Orders());
+var orderService = new OrderService(orderStore);
+
+Console.WriteLine($"Сховище: {orderStore.GetType().Name}");
+if (useFileStore)
+{
+    Console.WriteLine($"Файл: {ordersPath}");
+}
+
+Order createdOrder = orderService.CreateOrder(customerEntity.Id);
+orderService.AddLine(createdOrder.Id, laptop, 1);
+orderService.AddLine(createdOrder.Id, mouse, 2);
+orderService.AddLine(createdOrder.Id, mouse, 2);
+orderService.AddLine(createdOrder.Id, mouse, 2);
+orderService.Confirm(createdOrder.Id, customerEntity);
+
+Console.WriteLine($"Створено та змінено: {createdOrder}");
+Console.WriteLine($"Усього в сховищі: {orderService.All().Count}");
+foreach (Order storedOrder in orderService.All().Take(5))
+{
+    Console.WriteLine($" {storedOrder}");
+}
+
+Order? foundOrder = orderService.Find(createdOrder.Id);
+Console.WriteLine($"Знайдено за id: {foundOrder}");
+
+TryDo(
+    "пошук відсутнього замовлення для зміни",
+    () => orderService.AddLine("missing-id", laptop, 1));
 
 return 0;
 
