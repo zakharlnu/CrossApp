@@ -1,7 +1,9 @@
-﻿using Core;
+﻿using Cli.Notifications;
+using Core;
 using Core.Abstractions;
 using Core.Domain;
 using Core.Dto;
+using Core.Events;
 using Core.Import;
 using Core.Services;
 using Core.Storage;
@@ -10,6 +12,9 @@ string? importPath = args.FirstOrDefault(argument => !argument.StartsWith("--"))
 string path = importPath is not null
     ? importPath
     : Path.Combine("data", "sample.csv");
+bool isCsv = Path.GetExtension(path).Equals(
+    ".csv",
+    StringComparison.OrdinalIgnoreCase);
 
 if (!File.Exists(path))
 {
@@ -19,7 +24,9 @@ if (!File.Exists(path))
 
 OrderImportResult? result = Path.GetExtension(path).ToLowerInvariant() switch
 {
-    ".csv" => OrderCsvImporter.Load(path),
+    ".csv" => OrderCsvImporter.Load(
+        path,
+        error => Console.WriteLine($"[ПРОПУЩЕНО] {error}")),
     ".json" => FromProducts(ProductJsonImporter.Load(path)),
     _ => null
 };
@@ -51,9 +58,12 @@ if (result.Errors.Count > 0)
 {
     Console.WriteLine($"Пропущено записів: {result.Errors.Count}");
 
-    foreach (string error in result.Errors)
+    if (!isCsv)
     {
-        Console.WriteLine($" ! {error}");
+        foreach (string error in result.Errors)
+        {
+            Console.WriteLine($" ! {error}");
+        }
     }
 }
 
@@ -174,22 +184,50 @@ string ordersPath = Path.Combine(AppContext.BaseDirectory, "data", "orders.json"
 IOrderStore orderStore = useFileStore
     ? new FileOrderStore(ordersPath)
     : new InMemoryOrderStore(SampleData.Orders());
-var orderService = new OrderService(orderStore);
+
+string logPath = Path.Combine(AppContext.BaseDirectory, "logs", "app.log");
+Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
+File.WriteAllText(logPath, $"[ЛОГ] {DateTime.Now:yyyy-MM-dd HH:mm:ss} — початок логування{Environment.NewLine}");
+
+string sinkLogPath = Path.Combine(AppContext.BaseDirectory, "logs", "sink.log");
+INotificationSink notificationSink = new FileSink(sinkLogPath);
+var orderService = new OrderService(orderStore, notificationSink);
+
+void OnOrderChanged(object? sender, OrderChangedEventArgs eventArgs)
+{
+    string line =
+        $"[ПОДІЯ] {eventArgs.At:HH:mm:ss} {eventArgs.Kind,-10} " +
+        $"{eventArgs.OrderId} позицій: {eventArgs.LinesCount}, " +
+        $"сума: {eventArgs.Total:F2}";
+
+    Console.WriteLine(line);
+    File.AppendAllText(logPath, line + Environment.NewLine);
+}
+
+orderService.Changed += OnOrderChanged;
+
+int changes = 0;
+orderService.Changed += (_, _) => changes++;
 
 Console.WriteLine($"Сховище: {orderStore.GetType().Name}");
+Console.WriteLine($"Notification sink: {notificationSink.GetType().Name}");
+Console.WriteLine($"Файл notification sink: {sinkLogPath}");
 if (useFileStore)
 {
     Console.WriteLine($"Файл: {ordersPath}");
 }
 
+Console.WriteLine();
+Console.WriteLine("==================================================");
+Console.WriteLine("=== Лабораторна 6: події та делегати ===");
+
 Order createdOrder = orderService.CreateOrder(customerEntity.Id);
 orderService.AddLine(createdOrder.Id, laptop, 1);
-orderService.AddLine(createdOrder.Id, mouse, 2);
-orderService.AddLine(createdOrder.Id, mouse, 2);
 orderService.AddLine(createdOrder.Id, mouse, 2);
 orderService.Confirm(createdOrder.Id, customerEntity);
 
 Console.WriteLine($"Створено та змінено: {createdOrder}");
+Console.WriteLine($"Подій отримано: {changes}");
 Console.WriteLine($"Усього в сховищі: {orderService.All().Count}");
 foreach (Order storedOrder in orderService.All().Take(5))
 {
@@ -199,9 +237,28 @@ foreach (Order storedOrder in orderService.All().Take(5))
 Order? foundOrder = orderService.Find(createdOrder.Id);
 Console.WriteLine($"Знайдено за id: {foundOrder}");
 
+Console.WriteLine();
+Console.WriteLine("--- Перевірка відписки через -= ---");
+Console.WriteLine($"До операції: статус {createdOrder.Status}, подій {changes}");
+orderService.Changed -= OnOrderChanged;
+Console.WriteLine("Початок Cancel() — рядка [ПОДІЯ] Cancelled нижче не буде.");
+orderService.Cancel(createdOrder.Id);
+Console.WriteLine("Кінець Cancel().");
+Console.WriteLine($"Після операції: статус {createdOrder.Status}, подій {changes}");
+Console.WriteLine(
+    "Замовлення скасовано: [ПОДІЯ] не з'явилась, app.log не змінився.");
+
+int changesBeforeFailure = changes;
 TryDo(
     "пошук відсутнього замовлення для зміни",
     () => orderService.AddLine("missing-id", laptop, 1));
+Console.WriteLine(
+    $"Подій після помилки: {changes} (до помилки: {changesBeforeFailure})");
+
+IReadOnlyList<Order> expensiveOrders =
+    orderService.FindAll(storedOrder => storedOrder.Total >= 10_000m);
+Console.WriteLine($"Замовлень на суму від 10000: {expensiveOrders.Count}");
+Console.WriteLine($"Лог подій: {logPath}");
 
 return 0;
 

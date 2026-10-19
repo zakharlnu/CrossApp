@@ -8,7 +8,9 @@ public static class OrderCsvImporter
 {
     private const char Separator = ';';
 
-    public static OrderImportResult Load(string path)
+    public static OrderImportResult Load(
+        string path,
+        Action<string>? reportSkipped = null)
     {
         var products = new List<ProductDto>();
         var customers = new List<CustomerDto>();
@@ -41,7 +43,9 @@ public static class OrderCsvImporter
                     customers.Add(customer.Value);
                     break;
                 case ParseFailed failed:
-                    errors.Add($"рядок {lineNumber}: {failed.Reason}");
+                    string error = $"рядок {lineNumber}: {failed.Reason}";
+                    errors.Add(error);
+                    reportSkipped?.Invoke(error);
                     break;
             }
         }
