@@ -30,6 +30,19 @@ dotnet run --project src/Cli/Cli.csproj -- path/to/orders.csv
 # Імпорт товарів із JSON-файлу
 dotnet run --project src/Cli/Cli.csproj -- data/sample.json
 
+# Звіти лабораторної 7
+dotnet run --project src/Cli/Cli.csproj -- report-top
+dotnet run --project src/Cli/Cli.csproj -- report-top-orders
+dotnet run --project src/Cli/Cli.csproj -- report-expensive
+dotnet run --project src/Cli/Cli.csproj -- report-groups
+dotnet run --project src/Cli/Cli.csproj -- report-sum
+dotnet run --project src/Cli/Cli.csproj -- report-deferred
+dotnet run --project src/Cli/Cli.csproj -- report-customers
+dotnet run --project src/Cli/Cli.csproj -- report-benchmark
+
+# Звіт із файловим сховищем
+dotnet run --project src/Cli/Cli.csproj -- report-groups --file
+
 # Self-contained publish
 dotnet publish src/Cli/Cli.csproj \
     -c Release \
@@ -86,6 +99,14 @@ CrossApp
     │   ├── Events
     │   │   ├── OrderChangedEventArgs.cs
     │   │   └── OrderChangeKind.cs
+    │   ├── Reports
+    │   │   ├── CustomerOrderSummary.cs
+    │   │   ├── CustomerSummary.cs
+    │   │   ├── EnumerableExtensions.cs
+    │   │   ├── OrderReportLine.cs
+    │   │   ├── ReportBenchmarkResult.cs
+    │   │   ├── ReportService.cs
+    │   │   └── StatusSummary.cs
     │   ├── Services
     │   │   └── OrderService.cs
     │   ├── Storage
@@ -212,6 +233,60 @@ sink — коли повідомлення є явною залежністю с
 метод `NotifyAsync`, який повертає `Task`, або делегат
 `Func<OrderChangedEventArgs, Task>`, і явно виконати `await`. Якщо залишається
 `async void`, винятки потрібно перехоплювати всередині самого обробника.
+
+## Звіти через LINQ
+
+`ReportService` приймає `IEnumerable<Order>` і не залежить від сховища або CLI.
+Готові звіти матеріалізуються в `IReadOnlyList` незмінних record-DTO, тому зовнішній
+код не отримує доменні сутності та не залежить від їхньої внутрішньої структури.
+
+Реалізовані запити:
+
+- `TopCustomersByTotal` відповідає, які п'ять клієнтів мають найбільшу загальну
+  суму замовлень; використовує `GroupBy`, `Sum`, `OrderByDescending`, `ThenBy`,
+  `Take` і `Select`;
+- `ExpensiveOrders` знаходить замовлення дорожче заданої суми; використовує
+  `Where`, два ключі сортування і проєкцію в `OrderReportLine`;
+- `ByStatus` показує кількість і загальну суму замовлень для кожного статусу;
+  використовує `GroupBy`, `Count`, `Sum`, `Select` і сортування;
+- `Totals` обчислює кількість замовлень, загальну суму, середній чек і максимальне
+  замовлення. Для порожнього джерела він повертає нулі, тому `Average` і `Max` не
+  кидають `InvalidOperationException`.
+
+`ExpensiveOrdersQuery` повертає відкладений LINQ-запит: під час його створення
+`Where`, `OrderBy` і `Select` ще не перебирають джерело. Кожен виклик `Count()`
+запускає запит заново, тому після додавання дорогого замовлення до локального списку
+другий результат збільшується на один. Виклик `ToList()` матеріалізує знімок, тому
+після очищення початкового списку кількість елементів у знімку не змінюється.
+
+`SampleData` містить 15 замовлень із різними сумами та трьома статусами: `Draft`,
+`Confirmed` і `Cancelled`. Цього достатньо, щоб топ, фільтр і групування давали
+непорожні та наочні результати.
+
+### Додаткові завдання
+
+`ByCustomer` виконує `GroupJoin` колекцій клієнтів і замовлень за ідентифікатором
+клієнта. На відміну від звичайного `Join`, він залишає у звіті навіть клієнта без
+замовлень: для нього кількість і сума дорівнюють нулю. Результат проєктується в
+`CustomerOrderSummary`, тому назовні не передаються доменні сутності.
+
+Метод-розширення `TopBy` містить спільну логіку сортування за показником,
+додатковим рядковим ключем і вибору перших N елементів. Його використовують звіти
+`TopCustomersByTotal` і `TopOrdersByTotal`; додатковий ключ робить результат
+детермінованим, якщо суми однакові.
+
+`ByStatus` записаний у синтаксисі запитів `from ... group ... into ...`. Для
+групування та обчислення кількох агрегатів він читається послідовно: спочатку група,
+потім сума, сортування і проєкція. Методний синтаксис зручніший для коротких
+ланцюжків на кшталт `Where` → `OrderBy` → `Select`, тому решта звітів залишена в
+ньому. Обидва записи компілюються у виклики тих самих LINQ-методів.
+
+Команда `report-benchmark` створює 100 000 замовлень і через `Stopwatch` порівнює
+однаковий звіт без проміжного `ToList` та з матеріалізацією одразу після `Where`.
+Обидва варіанти повертають однакову кількість рядків, але проміжний список потребує
+додаткової пам'яті й проходу по відібраних елементах. Конкретний час залежить від
+машини, стану JIT і навантаження, тому це демонстраційне вимірювання, а не точний
+мікробенчмарк.
 
 ## Self-contained publish
 

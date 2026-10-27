@@ -4,6 +4,26 @@ namespace Core;
 
 public static class SampleData
 {
+    public static IReadOnlyList<Customer> Customers() =>
+    [
+        Customer.Create("C-001", "Олена Коваль", "olena@example.com"),
+        Customer.Create("C-002", "Іван Петренко", phone: "+380501000002"),
+        Customer.Create("C-003", "Марія Бондар", "maria@example.com"),
+        Customer.Create("C-004", "Андрій Мельник", phone: "+380501000004"),
+        Customer.Create("C-005", "Софія Шевченко", "sofia@example.com"),
+        Customer.Create("C-006", "Максим Ткаченко", phone: "+380501000006"),
+        Customer.Create("C-007", "Анна Кравченко", "anna@example.com"),
+        Customer.Create("C-008", "Олександр Бойко", phone: "+380501000008"),
+        Customer.Create("C-009", "Вікторія Ковальчук", "victoria@example.com"),
+        Customer.Create("C-010", "Дмитро Олійник", phone: "+380501000010"),
+        Customer.Create("C-011", "Катерина Поліщук", "kateryna@example.com"),
+        Customer.Create("C-012", "Богдан Лисенко", phone: "+380501000012"),
+        Customer.Create("C-013", "Наталія Романюк", "nataliia@example.com"),
+        Customer.Create("C-014", "Артем Савчук", phone: "+380501000014"),
+        Customer.Create("C-015", "Юлія Мороз", "yuliia@example.com"),
+        Customer.Create("C-016", "Роман Гончар", phone: "+380501000016")
+    ];
+
     public static IReadOnlyList<Order> Orders()
     {
         Order order1 = Order.Create("O-001", "C-001");
