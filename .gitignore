@@ -6,6 +6,10 @@
 # dotenv files
 .env
 
+# Runtime order storage (sample import files remain tracked)
+/data/orders.json
+/data/*.tmp
+
 # User-specific files
 *.rsuser
 *.suo

@@ -8,19 +8,24 @@ public sealed class Order
 
     public string Id { get; }
     public string CustomerId { get; }
+    public DateTimeOffset CreatedAt { get; }
     public OrderStatus Status { get; private set; }
     public bool IsConfirmed => Status == OrderStatus.Confirmed;
     public IReadOnlyList<OrderLine> Lines => _lines.AsReadOnly();
     public decimal Total => _lines.Sum(line => line.Total);
 
-    private Order(string id, string customerId)
+    private Order(string id, string customerId, DateTimeOffset createdAt)
     {
         Id = id;
         CustomerId = customerId;
+        CreatedAt = createdAt;
         Status = OrderStatus.Draft;
     }
 
-    public static Order Create(string id, string customerId)
+    public static Order Create(
+        string id,
+        string customerId,
+        DateTimeOffset? createdAt = null)
     {
         if (string.IsNullOrWhiteSpace(id))
         {
@@ -36,14 +41,17 @@ public sealed class Order
                 nameof(customerId));
         }
 
-        return new Order(id.Trim(), customerId.Trim());
+        return new Order(
+            id.Trim(),
+            customerId.Trim(),
+            (createdAt ?? DateTimeOffset.UtcNow).ToUniversalTime());
     }
 
     public void AddLine(string productId, string productName, decimal price, int quantity)
     {
         if (Status != OrderStatus.Draft)
         {
-            throw new InvalidOperationException(
+            throw new DomainException(
                 $"Замовлення {Id} має статус {Status}, рядки додавати не можна");
         }
 
@@ -60,7 +68,7 @@ public sealed class Order
     {
         if (_lines.Count == 0)
         {
-            throw new InvalidOperationException(
+            throw new DomainException(
                 $"Неможливо підтвердити порожнє замовлення {Id}");
         }
 
@@ -73,7 +81,12 @@ public sealed class Order
     }
 
     public OrderDto ToDto() =>
-        new(Id, CustomerId, Status.ToString(), _lines.Select(line => line.ToDto()).ToList());
+        new(
+            Id,
+            CustomerId,
+            Status.ToString(),
+            _lines.Select(line => line.ToDto()).ToList(),
+            CreatedAt);
 
     public static Order FromDto(OrderDto dto)
     {
@@ -84,7 +97,7 @@ public sealed class Order
             throw new ArgumentException("Список рядків замовлення відсутній", nameof(dto));
         }
 
-        Order order = Create(dto.Id, dto.CustomerId);
+        Order order = Create(dto.Id, dto.CustomerId, dto.CreatedAt);
 
         foreach (OrderLineDto line in dto.Lines)
         {
@@ -128,7 +141,7 @@ public sealed class Order
 
         if (!transitionAllowed)
         {
-            throw new InvalidOperationException(
+            throw new DomainException(
                 $"Перехід замовлення {Id} зі статусу {Status} у {newStatus} неможливий");
         }
 

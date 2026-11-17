@@ -9,7 +9,7 @@ public static class OrderConfirmationService
 
         if (!string.Equals(order.CustomerId, customer.Id, StringComparison.Ordinal))
         {
-            throw new InvalidOperationException(
+            throw new DomainException(
                 $"Замовлення {order.Id} належить клієнту {order.CustomerId}, " +
                 $"а не {customer.Id}");
         }

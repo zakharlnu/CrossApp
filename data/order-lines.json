@@ -1,0 +1,114 @@
+[
+  {
+    "orderId": "O-001",
+    "productId": "P-016",
+    "productName": "Док-станція",
+    "price": 3499.00,
+    "quantity": 1
+  },
+  {
+    "orderId": "O-001",
+    "productId": "P-017",
+    "productName": "Чохол для ноутбука",
+    "price": 1199.00,
+    "quantity": 1
+  },
+  {
+    "orderId": "O-003",
+    "productId": "P-018",
+    "productName": "Комплект кабелів",
+    "price": 699.00,
+    "quantity": 2
+  },
+  {
+    "orderId": "O-003",
+    "productId": "P-019",
+    "productName": "Підставка для клавіатури",
+    "price": 899.00,
+    "quantity": 1
+  },
+  {
+    "orderId": "O-003",
+    "productId": "P-020",
+    "productName": "Набір перемикачів",
+    "price": 549.00,
+    "quantity": 2
+  },
+  {
+    "orderId": "O-007",
+    "productId": "P-021",
+    "productName": "Кріплення для вебкамери",
+    "price": 749.00,
+    "quantity": 1
+  },
+  {
+    "orderId": "O-007",
+    "productId": "P-022",
+    "productName": "LED-лампа",
+    "price": 1299.00,
+    "quantity": 2
+  },
+  {
+    "orderId": "O-009",
+    "productId": "P-023",
+    "productName": "Підставка для миші",
+    "price": 599.00,
+    "quantity": 1
+  },
+  {
+    "orderId": "O-009",
+    "productId": "P-024",
+    "productName": "Засіб для очищення",
+    "price": 249.00,
+    "quantity": 2
+  },
+  {
+    "orderId": "O-011",
+    "productId": "P-025",
+    "productName": "Перехідник HDMI-DP",
+    "price": 799.00,
+    "quantity": 1
+  },
+  {
+    "orderId": "O-011",
+    "productId": "P-026",
+    "productName": "Кабель DisplayPort",
+    "price": 649.00,
+    "quantity": 2
+  },
+  {
+    "orderId": "O-011",
+    "productId": "P-027",
+    "productName": "Органайзер для кабелів",
+    "price": 299.00,
+    "quantity": 3
+  },
+  {
+    "orderId": "O-013",
+    "productId": "P-028",
+    "productName": "Папір A4",
+    "price": 299.00,
+    "quantity": 5
+  },
+  {
+    "orderId": "O-013",
+    "productId": "P-029",
+    "productName": "Картридж",
+    "price": 1899.00,
+    "quantity": 2
+  },
+  {
+    "orderId": "O-013",
+    "productId": "P-030",
+    "productName": "USB-кабель для принтера",
+    "price": 349.00,
+    "quantity": 1
+  },
+  {
+    "orderId": "O-013",
+    "productId": "P-031",
+    "productName": "Набір фотопаперу",
+    "price": 459.00,
+    "quantity": 2
+  }
+]

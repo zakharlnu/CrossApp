@@ -1,0 +1,61 @@
+@host = http://localhost:5080
+@orderId = paste-created-id-here
+
+### Create
+POST {{host}}/api/orders
+Content-Type: application/json
+
+{
+  "customerId": "C-101",
+  "lines": [
+    {
+      "productId": "P-101",
+      "productName": "Ноутбук",
+      "price": 32999.99,
+      "quantity": 1
+    },
+    {
+      "productId": "P-102",
+      "productName": "Миша",
+      "price": 849.50,
+      "quantity": 2
+    }
+  ]
+}
+
+### Copy id from Create response to orderId above, then read it
+GET {{host}}/api/orders/{{orderId}}
+
+### List
+GET {{host}}/api/orders
+
+### Update
+PUT {{host}}/api/orders/{{orderId}}
+Content-Type: application/json
+
+{
+  "customerId": "C-101",
+  "lines": [
+    {
+      "productId": "P-103",
+      "productName": "Монітор",
+      "price": 10999.90,
+      "quantity": 2
+    }
+  ]
+}
+
+### Validation error (400)
+POST {{host}}/api/orders
+Content-Type: application/json
+
+{
+  "customerId": "",
+  "lines": []
+}
+
+### Delete
+DELETE {{host}}/api/orders/{{orderId}}
+
+### Read after Delete (404)
+GET {{host}}/api/orders/{{orderId}}

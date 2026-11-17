@@ -1,0 +1,44 @@
+[
+  {
+    "orderId": "O-001",
+    "productId": "P-BAD-001",
+    "productName": "Товар із від’ємною кількістю",
+    "price": 100.00,
+    "quantity": -1
+  },
+  {
+    "orderId": "",
+    "productId": "P-BAD-002",
+    "productName": "Товар без замовлення",
+    "price": 200.00,
+    "quantity": 1
+  },
+  {
+    "orderId": "O-003",
+    "productId": "",
+    "productName": "Товар без ідентифікатора",
+    "price": 300.00,
+    "quantity": 1
+  },
+  {
+    "orderId": "O-007",
+    "productId": "P-BAD-004",
+    "productName": "",
+    "price": 400.00,
+    "quantity": 1
+  },
+  {
+    "orderId": "O-009",
+    "productId": "P-BAD-005",
+    "productName": "Товар із від’ємною ціною",
+    "price": -10.00,
+    "quantity": 1
+  },
+  {
+    "orderId": "O-UNKNOWN",
+    "productId": "P-BAD-006",
+    "productName": "Товар для невідомого замовлення",
+    "price": 500.00,
+    "quantity": 1
+  }
+]

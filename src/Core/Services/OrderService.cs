@@ -1,6 +1,7 @@
 using Core.Abstractions;
 using Core.Domain;
 using Core.Events;
+using Core.Import;
 
 namespace Core.Services;
 
@@ -63,6 +64,135 @@ public sealed class OrderService
         return _store.List().Where(predicate).ToList();
     }
 
+    public async Task<int> ImportAsync(
+        IOrderLineImporter importer,
+        string path,
+        CancellationToken cancellationToken = default)
+    {
+        return await ImportAsync(
+            importer,
+            path,
+            progress: null,
+            cancellationToken);
+    }
+
+    public async Task<int> ImportAsync(
+        IOrderLineImporter importer,
+        string path,
+        IProgress<int>? progress,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(importer);
+
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            throw new ArgumentException(
+                "Шлях до файлу імпорту не може бути порожнім",
+                nameof(path));
+        }
+
+        IReadOnlyList<OrderLineImport> items =
+            await importer.LoadAsync(path, cancellationToken);
+        int added = 0;
+        progress?.Report(0);
+
+        for (int index = 0; index < items.Count; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (TryImport(items[index]))
+            {
+                added++;
+            }
+
+            progress?.Report((index + 1) * 100 / items.Count);
+        }
+
+        if (items.Count == 0)
+        {
+            progress?.Report(100);
+        }
+
+        return added;
+    }
+
+    public async Task<int> ImportStreamingAsync(
+        IStreamingOrderLineImporter importer,
+        string path,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(importer);
+
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            throw new ArgumentException(
+                "Шлях до файлу імпорту не може бути порожнім",
+                nameof(path));
+        }
+
+        int added = 0;
+
+        await foreach (OrderLineImport item in
+            importer.StreamAsync(path, cancellationToken)
+                .WithCancellation(cancellationToken))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (TryImport(item))
+            {
+                added++;
+            }
+        }
+
+        return added;
+    }
+
+    public async Task<int> ImportWithTimeoutAsync(
+        IOrderLineImporter importer,
+        string path,
+        TimeSpan timeout,
+        CancellationToken userToken = default)
+    {
+        if (timeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(timeout),
+                timeout,
+                "Таймаут має бути більшим за нуль");
+        }
+
+        using var timeoutSource = new CancellationTokenSource(timeout);
+        using var linkedSource = CancellationTokenSource.CreateLinkedTokenSource(
+            userToken,
+            timeoutSource.Token);
+
+        return await ImportAsync(importer, path, linkedSource.Token);
+    }
+
+    private bool TryImport(OrderLineImport item)
+    {
+        Order order = GetRequired(item.OrderId);
+
+        bool alreadyImported = order.Lines.Any(line =>
+            string.Equals(
+                line.ProductId,
+                item.Line.ProductId,
+                StringComparison.OrdinalIgnoreCase));
+
+        if (alreadyImported)
+        {
+            return false;
+        }
+
+        order.AddLine(
+            item.Line.ProductId,
+            item.Line.ProductName,
+            item.Line.Price,
+            item.Line.Quantity);
+        _store.Update(order);
+        OnChanged(order, OrderChangeKind.LineAdded);
+        return true;
+    }
+
     private void OnChanged(Order order, OrderChangeKind kind)
     {
         var notification = new OrderChangedEventArgs(
@@ -77,5 +207,5 @@ public sealed class OrderService
 
     private Order GetRequired(string id) =>
         _store.GetById(id)
-        ?? throw new InvalidOperationException($"Замовлення з id={id} не знайдено");
+        ?? throw new DomainException($"Замовлення з id={id} не знайдено");
 }

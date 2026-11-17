@@ -6,6 +6,7 @@ namespace Core.Storage;
 public sealed class InMemoryOrderStore : IOrderStore
 {
     private readonly Dictionary<string, Order> _orders;
+    private readonly object _sync = new();
 
     public InMemoryOrderStore(IEnumerable<Order>? seed = null)
     {
@@ -14,31 +15,50 @@ public sealed class InMemoryOrderStore : IOrderStore
             StringComparer.OrdinalIgnoreCase);
     }
 
-    public IReadOnlyList<Order> List() =>
-        _orders.Values.ToList();
+    public IReadOnlyList<Order> List()
+    {
+        lock (_sync)
+        {
+            return _orders.Values.ToList();
+        }
+    }
 
-    public Order? GetById(string id) =>
-        _orders.GetValueOrDefault(id);
+    public Order? GetById(string id)
+    {
+        lock (_sync)
+        {
+            return _orders.GetValueOrDefault(id);
+        }
+    }
 
     public void Add(Order order)
     {
         ArgumentNullException.ThrowIfNull(order);
 
-        if (_orders.ContainsKey(order.Id))
+        lock (_sync)
         {
-            throw new InvalidOperationException(
-                $"Замовлення з id={order.Id} уже існує");
+            if (!_orders.TryAdd(order.Id, order))
+            {
+                throw new DomainException(
+                    $"Замовлення з id={order.Id} уже існує");
+            }
         }
-
-        _orders.Add(order.Id, order);
     }
 
     public void Update(Order order)
     {
         ArgumentNullException.ThrowIfNull(order);
-        _orders[order.Id] = order;
+        lock (_sync)
+        {
+            _orders[order.Id] = order;
+        }
     }
 
-    public bool Remove(string id) =>
-        _orders.Remove(id);
+    public bool Remove(string id)
+    {
+        lock (_sync)
+        {
+            return _orders.Remove(id);
+        }
+    }
 }

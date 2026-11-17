@@ -11,6 +11,7 @@ public sealed class FileOrderStore : IOrderStore
     private static readonly JsonSerializerOptions Options = new()
     {
         PropertyNameCaseInsensitive = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true,
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
@@ -51,7 +52,7 @@ public sealed class FileOrderStore : IOrderStore
 
         if (_cache.ContainsKey(order.Id))
         {
-            throw new InvalidOperationException(
+            throw new DomainException(
                 $"Замовлення з id={order.Id} уже існує");
         }
 
@@ -80,6 +81,33 @@ public sealed class FileOrderStore : IOrderStore
         return true;
     }
 
+    public void ReplaceAll(IEnumerable<Order> orders)
+    {
+        ArgumentNullException.ThrowIfNull(orders);
+
+        var replacement = new Dictionary<string, Order>(
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (Order order in orders)
+        {
+            if (!replacement.TryAdd(order.Id, order))
+            {
+                throw new DomainException(
+                    $"Замовлення з id={order.Id} дублюється в колекції");
+            }
+        }
+
+        _cache.Clear();
+
+        foreach ((string id, Order order) in replacement)
+        {
+            _cache.Add(id, order);
+        }
+
+        _loaded = true;
+        Flush();
+    }
+
     private void EnsureLoaded()
     {
         if (_loaded)
@@ -92,6 +120,8 @@ public sealed class FileOrderStore : IOrderStore
             string json = File.ReadAllText(_path);
             List<OrderDto> dtos =
                 JsonSerializer.Deserialize<List<OrderDto>>(json, Options) ?? [];
+
+            _cache.Clear();
 
             foreach (OrderDto dto in dtos)
             {
@@ -109,9 +139,23 @@ public sealed class FileOrderStore : IOrderStore
         Directory.CreateDirectory(directory);
 
         List<OrderDto> dtos = _cache.Values
+            .OrderBy(order => order.Id, StringComparer.Ordinal)
             .Select(order => order.ToDto())
             .ToList();
         string json = JsonSerializer.Serialize(dtos, Options);
-        File.WriteAllText(_path, json);
+        string temporaryPath = _path + ".tmp";
+
+        try
+        {
+            File.WriteAllText(temporaryPath, json);
+            File.Move(temporaryPath, _path, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temporaryPath))
+            {
+                File.Delete(temporaryPath);
+            }
+        }
     }
 }

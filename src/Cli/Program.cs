@@ -1,6 +1,10 @@
 ﻿using Cli.Notifications;
+using Cli.Import;
+using System.Reflection;
+using System.Text.Json;
 using Core;
 using Core.Abstractions;
+using Core.Configuration;
 using Core.Domain;
 using Core.Dto;
 using Core.Events;
@@ -8,13 +12,62 @@ using Core.Import;
 using Core.Reports;
 using Core.Services;
 using Core.Storage;
+using Microsoft.Extensions.Configuration;
+
+string environmentName =
+    Environment.GetEnvironmentVariable("CROSSAPP_ENVIRONMENT")
+    ?? "Development";
+string[] configurationArguments = GetConfigurationArguments(args);
+
+IConfiguration configuration = new ConfigurationBuilder()
+    .SetBasePath(AppContext.BaseDirectory)
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
+    .AddJsonFile(
+        $"appsettings.{environmentName}.json",
+        optional: true,
+        reloadOnChange: false)
+    .AddUserSecrets(Assembly.GetExecutingAssembly(), optional: true)
+    .AddEnvironmentVariables(prefix: "CROSSAPP_")
+    .AddCommandLine(configurationArguments)
+    .Build();
+
+AppOptions appOptions = configuration.Get<AppOptions>() ?? new AppOptions();
+string? legacyDataPath =
+    Environment.GetEnvironmentVariable("CROSSAPP_DATA_PATH");
+var storageOptions = new StorageOptions
+{
+    DataPath = string.IsNullOrWhiteSpace(legacyDataPath)
+        ? appOptions.Storage.DataPath
+        : legacyDataPath,
+    FileName = appOptions.Storage.FileName
+};
+string configuredOrdersPath =
+    storageOptions.ResolveFullPath(AppContext.BaseDirectory);
 
 string? commandOrPath =
     args.FirstOrDefault(argument => !argument.StartsWith("--"));
-bool hasReportCommand =
-    commandOrPath?.StartsWith("report-", StringComparison.Ordinal) == true;
-string? importPath = hasReportCommand ? null : commandOrPath;
-string reportCommand = hasReportCommand ? commandOrPath! : "report-top";
+bool hasApplicationCommand =
+    commandOrPath?.StartsWith("report-", StringComparison.Ordinal) == true
+    || commandOrPath is "import-async" or "import-stream" or "export" or "import";
+string? importPath = hasApplicationCommand ? null : commandOrPath;
+string applicationCommand = hasApplicationCommand
+    ? commandOrPath!
+    : "report-top";
+string asyncImportPath = applicationCommand is "import-async" or "import-stream"
+    && args.Length > 1
+    && !args[1].StartsWith("--", StringComparison.Ordinal)
+        ? args[1]
+        : Path.Combine("data", "order-lines.json");
+
+if (applicationCommand is "export" or "import")
+{
+    return RunCollectionCommand(
+        applicationCommand,
+        configuredOrdersPath,
+        appOptions,
+        configuration["Integration:ApiKey"]);
+}
+
 string path = importPath is not null
     ? importPath
     : Path.Combine("data", "sample.csv");
@@ -186,7 +239,7 @@ Console.WriteLine("==================================================");
 Console.WriteLine("=== Лабораторна 5: сервіс і сховища ===");
 
 bool useFileStore = args.Contains("--file");
-string ordersPath = Path.Combine(AppContext.BaseDirectory, "data", "orders.json");
+string ordersPath = configuredOrdersPath;
 IOrderStore orderStore = useFileStore
     ? new FileOrderStore(ordersPath)
     : new InMemoryOrderStore(SampleData.Orders());
@@ -221,6 +274,80 @@ Console.WriteLine($"Файл notification sink: {sinkLogPath}");
 if (useFileStore)
 {
     Console.WriteLine($"Файл: {ordersPath}");
+}
+
+if (applicationCommand is "import-async" or "import-stream")
+{
+    Console.WriteLine();
+    Console.WriteLine("==================================================");
+    Console.WriteLine("=== Лабораторна 8: асинхронний імпорт ===");
+
+    using var cancellationSource = new CancellationTokenSource();
+
+    void CancelImport(object? sender, ConsoleCancelEventArgs eventArgs)
+    {
+        eventArgs.Cancel = true;
+        cancellationSource.Cancel();
+    }
+
+    Console.CancelKeyPress += CancelImport;
+
+    if (args.Contains("--cancel"))
+    {
+        cancellationSource.Cancel();
+    }
+
+    bool demonstrateTimeout = args.Contains("--timeout-demo");
+
+    if (demonstrateTimeout)
+    {
+        cancellationSource.CancelAfter(TimeSpan.FromSeconds(2));
+        Console.WriteLine(
+            "Демонстрація таймауту: скасування через 2 секунди.");
+    }
+
+    try
+    {
+        var jsonImporter = new JsonOrderLineImporter();
+        IStreamingOrderLineImporter streamingImporter = demonstrateTimeout
+            ? new DelayedStreamingOrderLineImporter(
+                jsonImporter,
+                TimeSpan.FromMilliseconds(500))
+            : jsonImporter;
+        int added = applicationCommand == "import-stream" || demonstrateTimeout
+            ? await orderService.ImportStreamingAsync(
+                streamingImporter,
+                asyncImportPath,
+                cancellationSource.Token)
+            : await orderService.ImportAsync(
+                jsonImporter,
+                asyncImportPath,
+                new ConsoleProgress(),
+                cancellationSource.Token);
+        Console.WriteLine($"Імпортовано рядків замовлень: {added}");
+    }
+    catch (OperationCanceledException)
+    {
+        Console.WriteLine("Імпорт скасовано.");
+    }
+    catch (DomainException exception)
+    {
+        Console.WriteLine($"Дані відхилено: {exception.Message}");
+    }
+    catch (FileNotFoundException)
+    {
+        Console.WriteLine($"Файл не знайдено: {asyncImportPath}");
+    }
+    catch (JsonException exception)
+    {
+        Console.WriteLine($"Некоректний JSON: {exception.Message}");
+    }
+    finally
+    {
+        Console.CancelKeyPress -= CancelImport;
+    }
+
+    return 0;
 }
 
 Console.WriteLine();
@@ -272,7 +399,7 @@ Console.WriteLine("=== Лабораторна 7: звіти через LINQ ==="
 
 IReadOnlyList<Order> reportOrders = orderService.All();
 
-switch (reportCommand)
+switch (applicationCommand)
 {
     case "report-top":
         Console.WriteLine("Топ-5 клієнтів за сумою замовлень:");
@@ -440,4 +567,83 @@ static void TryDo(string title, Action action)
         Console.WriteLine(
             $" {title}: {exception.GetType().Name} — {exception.Message}");
     }
+}
+
+static string[] GetConfigurationArguments(string[] arguments)
+{
+    var result = new List<string>();
+
+    foreach (string argument in arguments)
+    {
+        if (argument.StartsWith("--", StringComparison.Ordinal)
+            && argument.Contains('='))
+        {
+            result.Add(argument);
+        }
+    }
+
+    return result.ToArray();
+}
+
+static int RunCollectionCommand(
+    string command,
+    string path,
+    AppOptions options,
+    string? apiKey)
+{
+    Console.WriteLine("=== Лабораторна 9: конфігурація та JSON ===");
+    Console.WriteLine($"Профіль: {options.EnvironmentName}");
+    Console.WriteLine($"Мінімальний рівень логу: {options.Logging.MinimumLevel}");
+    Console.WriteLine($"Валюта замовлень: {options.Orders.Currency}");
+    Console.WriteLine($"Файл даних: {path}");
+    Console.WriteLine(string.IsNullOrWhiteSpace(apiKey)
+        ? "ApiKey: не заданий"
+        : $"ApiKey: присутній, довжина {apiKey.Length}");
+
+    try
+    {
+        var store = new FileOrderStore(path);
+
+        if (command == "export")
+        {
+            IReadOnlyList<Order> orders = SampleData.Orders();
+            store.ReplaceAll(orders);
+            Console.WriteLine($"Експортовано замовлень: {orders.Count}");
+            return 0;
+        }
+
+        IReadOnlyList<Order> imported = store.List();
+        Console.WriteLine($"Імпортовано замовлень: {imported.Count}");
+
+        foreach (Order order in imported.Take(5))
+        {
+            Console.WriteLine($" {order}");
+        }
+
+        return 0;
+    }
+    catch (FileNotFoundException)
+    {
+        Console.WriteLine($"Файл не знайдено: {path}");
+    }
+    catch (JsonException exception)
+    {
+        Console.WriteLine($"Некоректний JSON: {exception.Message}");
+    }
+    catch (DomainException exception)
+    {
+        Console.WriteLine($"Дані відхилено: {exception.Message}");
+    }
+    catch (IOException exception)
+    {
+        Console.WriteLine($"Помилка файлової системи: {exception.Message}");
+    }
+
+    return 1;
+}
+
+file sealed class ConsoleProgress : IProgress<int>
+{
+    public void Report(int value) =>
+        Console.WriteLine($"Прогрес імпорту: {value}%");
 }
