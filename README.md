@@ -108,6 +108,32 @@ dotnet publish src/Cli/Cli.csproj \
 
 ## HTTP API
 
+### SQLite і міграції (лабораторна 11)
+
+API зберігає замовлення і їхні рядки у SQLite (`Orders` 1:N `OrderLines`).
+Рядок підключення береться з `ConnectionStrings:AppDb` у
+`src/Api/appsettings.json`: `Data Source=data/app.db`. Відносний шлях
+обчислюється від `ContentRootPath` API (`src/Api` при запуску з проєкту),
+тому типовий файл — `src/Api/data/app.db`; каталог створюється автоматично.
+Можна перевизначити рядок через `ConnectionStrings__AppDb`.
+У Development міграції застосовуються при запуску API; в інших середовищах
+застосуйте їх окремою командою.
+
+```bash
+dotnet tool install --global dotnet-ef --version "10.*"
+dotnet ef migrations add InitialCreate --project src/Infrastructure --startup-project src/Api --output-dir Migrations
+dotnet ef database update --project src/Infrastructure --startup-project src/Api
+dotnet ef migrations list --project src/Infrastructure --startup-project src/Api
+sqlite3 src/Api/data/app.db '.tables'
+```
+
+`InitialCreate` уже є в проєкті; команду `migrations add` потрібно виконувати
+тільки при створенні нової міграції з іншою назвою. Щоб скинути локальну базу,
+зупиніть API, видаліть `src/Api/data/app.db` разом із можливими
+`src/Api/data/app.db-wal` і `src/Api/data/app.db-shm`, тоді запустіть
+`database update`. Це видалить локальні записи.
+Файл бази не додається в Git, а міграції зберігають відтворювану схему.
+
 API використовує окремі DTO та надає п'ять маршрутів для замовлень:
 
 | Метод | Маршрут | Успішна відповідь | Помилки |

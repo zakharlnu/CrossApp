@@ -9,6 +9,9 @@
 # Runtime order storage (sample import files remain tracked)
 /data/orders.json
 /data/*.tmp
+*.db
+*.db-shm
+*.db-wal
 
 # User-specific files
 *.rsuser
